@@ -90,7 +90,7 @@ def push_to_model_registry(
     # if prod_flag:
     #     namespace = namespace.split("-")[0]+"-prod"
     # else:
-    namespace = namespace.split("-")[0]
+    namespace = namespace#.split("-")[0]
 
     model_object_prefix = model_name if model_name else "model"
     version = version if version else datetime.now().strftime('%y%m%d%H%M')
