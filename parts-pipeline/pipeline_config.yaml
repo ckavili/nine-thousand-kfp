@@ -1,0 +1,20 @@
+# Pipeline Configuration Template
+# This file defines the import module, function name, and metadata for KFP pipeline compilation
+# Copy this file to each pipeline folder and customize as needed
+
+# Pipeline entrypoint configuration
+entrypoint:
+  module: "prod_train_save_pipeline"  # Python module to import from
+  function: "training_pipeline"       # Function name to compile
+
+# Default metadata for pipeline compilation
+# These values will be merged with runtime parameters
+metadata:
+  hyperparameters:
+    epochs: 2
+  model_name: "default-model"
+  prod_flag: true
+  # Runtime values will override these defaults:
+  # version: "${VERSION}"  # Set by pipeline
+  # cluster_domain: "$(params.CLUSTER_DOMAIN)"  # Set by pipeline
+  # model_storage_pvc: "model-pvc"  # Set by pipeline
