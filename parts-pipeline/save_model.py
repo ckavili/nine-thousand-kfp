@@ -87,14 +87,16 @@ def push_to_model_registry(
     with open(namespace_file_path, 'r') as namespace_file:
         namespace = namespace_file.read()
 
-    if prod_flag:
-        namespace = namespace.split("-")[0]+"-prod"
-    else:
-        namespace = namespace.split("-")[0]
+    # if prod_flag:
+    #     namespace = namespace.split("-")[0]+"-prod"
+    # else:
+    namespace = namespace.split("-")[0]
 
     model_object_prefix = model_name if model_name else "model"
     version = version if version else datetime.now().strftime('%y%m%d%H%M')
     server_address = f"https://{namespace}-registry-rest.{cluster_domain}"
+
+    print(f"Model registry server address: {server_address}")
 
     registry = ModelRegistry(
         server_address=server_address,
