@@ -52,7 +52,7 @@ def evaluate_keras_model_performance(
     # if prod_flag:
     #     namespace = environ.get("NAMESPACE").split("-")[0]+"-prod"
     # else:
-    namespace = environ.get("NAMESPACE").split("-")[0]
+    namespace = environ.get("NAMESPACE")#.split("-")[0]
 
     print(f"Using namespace: {namespace}")
     print(f"Connecting to: https://{namespace}-registry-rest.{cluster_domain}")
