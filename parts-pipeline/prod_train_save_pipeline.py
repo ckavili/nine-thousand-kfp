@@ -30,9 +30,9 @@ data_connection_secret_name = 'aws-connection-models'
   name='kfp-training-pipeline',
   description='We train an amazing model 🚂'
 )
-def training_pipeline(hyperparameters: dict, model_name: str, version: str, cluster_domain: str, model_storage_pvc: str, prod_flag: bool):
+def training_pipeline(data_source: dict, hyperparameters: dict, model_name: str, version: str, cluster_domain: str, model_storage_pvc: str, prod_flag: bool):
     ### 🐶 Fetch Data from GitHub
-    fetch_task = fetch_data()
+    fetch_task = fetch_data(data_source)
 
     ### 🍇 Fetch Data from DVC
 
@@ -119,6 +119,12 @@ if __name__ == '__main__':
     COMPILE = True
 
     metadata = {
+        "data_source": {
+            "type": "dvc",
+            "dataset": "song_properties.parquet",
+            "dvc_hash": "abc123",
+            "repo_url": "https://github.com/nine-thousand-models/nine-thousand-data"
+        },
         "hyperparameters": {
             "epochs": 2
         },

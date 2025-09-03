@@ -10,6 +10,7 @@ from kfp.dsl import (
 
 @component(base_image='python:3.9', packages_to_install=["dask[dataframe]==2024.8.0", "s3fs==2025.2.0", "pandas==2.2.3"])
 def fetch_data(
+    data_source: dict,
     dataset: Output[Dataset]
 ):
     """
@@ -26,27 +27,27 @@ def fetch_data(
     data = song_rankings.merge(song_properties, on='spotify_id', how='left')
     
     dataset.path += ".csv"
-    dataset.metadata = {"song_properties": "https://github.com/rhoai-mlops/jukebox/raw/refs/heads/main/99-data_prep/song_properties.parquet", "song_rankings": "https://github.com/rhoai-mlops/jukebox/raw/refs/heads/main/99-data_prep/song_rankings.parquet" }
+    dataset.metadata = data_source
     data.to_csv(dataset.path, index=False, header=True)
 
 
-@component(base_image='python:3.9', packages_to_install=["dvc[s3]==3.1.0", "dask[dataframe]==2024.8.0", "s3fs==2025.2.0", "pandas==2.2.3"])
+@component(base_image='python:3.9', packages_to_install=["dvc[s3]==3.1.0", "dask[dataframe]==2024.8.0", "s3fs==2025.2.0", "pandas==2.2.3", "PyYAML==6.0.2"])
 def fetch_data_from_dvc(
     dataset: Output[Dataset],
-    cluster_domain: str,
-    git_version: str,
+    model_config: dict,
+    cluster_domain: str = "",
+    git_version: str = "main",
 ):
     """
-    Fetches data from DVC
+    Fetches data from DVC using the new architecture with separate data repo
     """
     
     import pandas as pd
     import yaml
-    import dvc
+    import json
     import configparser
     import os
     import subprocess
-    import git
     
     def run_command(command, cwd=None, env=None):
         result = subprocess.run(command, shell=True, cwd=cwd, text=True, capture_output=True, env=env)
@@ -68,30 +69,82 @@ def fetch_data_from_dvc(
     
     print("Updated PATH:", os.environ["PATH"])
 
-    namespace = os.environ.get("namespace").split('-')[0]
+    # Extract data source configuration from model config
+    data_source = model_config.get('data_source', {})
+    if data_source.get('type') != 'dvc':
+        raise ValueError("Model data_source type must be 'dvc'")
+    
+    dataset_name = data_source.get('dataset', 'song_properties.parquet')
+    expected_hash = data_source.get('dvc_hash')
+    data_repo_url = data_source.get('repo_url', 'https://github.com/nine-thousand-models/nine-thousand-data')
+    
+    print(f"Fetching dataset: {dataset_name}")
+    print(f"Expected DVC hash: {expected_hash}")
+
     os.chdir("/tmp")
 
-    run_command(f"git clone https://{git_username}:{git_password}@gitea-gitea.{cluster_domain}/{namespace}/jukebox.git")
-    os.chdir("/tmp/jukebox")
+    # Clone the data repository
+    run_command(f"git clone https://{git_username}:{git_password}@{data_repo_url.replace('https://', '')} data-repo")
+    os.chdir("/tmp/data-repo")
+    
     try:
         run_command(f"git checkout {git_version}")
     except Exception as e:
         print(e)
-        print(f"Could not check out version {git_version}")
-    run_command("dvc pull | rc=$?")
+        print(f"Could not check out version {git_version}, using main")
 
+    # Pull the specific dataset using DVC with new folder structure
+    dataset_path = dataset_name  # e.g., "datasets/exhaust-data/data.parquet"
+    dvc_file_path = f"{dataset_name}.dvc"  # e.g., "datasets/exhaust-data/data.parquet.dvc"
+    
+    if not os.path.exists(dvc_file_path):
+        raise FileNotFoundError(f"DVC file not found: {dvc_file_path}")
+    
+    # Verify hash matches expected
+    actual_hash = read_hash(dvc_file_path)
+    if expected_hash and actual_hash != expected_hash:
+        print(f"WARNING: Hash mismatch! Expected: {expected_hash}, Actual: {actual_hash}")
+    
+    # Pull the data file
+    run_command(f"dvc pull {dataset_path}")
+    
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(f"Dataset file not found after DVC pull: {dataset_path}")
+
+    # Read DVC config for metadata
     config = configparser.ConfigParser()
     config.read('.dvc/config')
 
-    song_properties = pd.read_parquet("song_properties.parquet")
-    song_rankings = pd.read_parquet('https://github.com/rhoai-mlops/jukebox/raw/refs/heads/main/99-data_prep/song_rankings.parquet')
+    # Load the data - assuming parquet format, but could be made configurable
+    if dataset_path.endswith('.parquet'):
+        main_data = pd.read_parquet(dataset_path)
+    elif dataset_path.endswith('.csv'):
+        main_data = pd.read_csv(dataset_path)
+    else:
+        raise ValueError(f"Unsupported file format: {dataset_path}")
     
-    data = song_rankings.merge(song_properties, on='spotify_id', how='left')
+    # For backward compatibility, still merge with song_rankings if needed
+    # This could be made configurable based on model requirements
+    try:
+        song_rankings = pd.read_parquet('https://github.com/rhoai-mlops/jukebox/raw/refs/heads/main/99-data_prep/song_rankings.parquet')
+        if 'spotify_id' in main_data.columns and 'spotify_id' in song_rankings.columns:
+            data = song_rankings.merge(main_data, on='spotify_id', how='left')
+        else:
+            data = main_data
+    except Exception as e:
+        print(f"Could not merge with song_rankings, using main dataset only: {e}")
+        data = main_data
     
+    # Save the dataset
     dataset.path += ".csv"
-    dvc_hash = read_hash("song_properties.parquet.dvc")
-    dataset.metadata = {"DVC training data hash": dvc_hash} | {section: str(dict(config.items(section))) for section in config.sections()}
+    dataset.metadata = {
+        "DVC training data hash": actual_hash,
+        "dataset_name": dataset_name,
+        "data_repo_url": data_repo_url
+    } | {section: str(dict(config.items(section))) for section in config.sections()}
+    
     data.to_csv(dataset.path, index=False, header=True)
+    print(f"Dataset saved with {len(data)} rows, DVC hash: {actual_hash}")
 
 
 @component(base_image='python:3.9', packages_to_install=["feast==0.40.0", "psycopg2>=2.9", "dask-expr==1.1.10", "s3fs==2024.6.1", "psycopg_pool==3.2.3", "psycopg==3.2.3", "pandas==2.2.3", "numpy==1.26.4"])
