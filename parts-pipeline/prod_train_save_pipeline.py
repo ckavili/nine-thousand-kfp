@@ -32,7 +32,7 @@ data_connection_secret_name = 'aws-connection-models'
 )
 def training_pipeline(data_source: dict, hyperparameters: dict, model_name: str, version: str, cluster_domain: str, model_storage_pvc: str, prod_flag: bool):
     ### 🐶 Fetch Data from GitHub
-    fetch_task = fetch_data(data_source)
+    fetch_task = fetch_data(data_source = data_source)
 
     ### 🍇 Fetch Data from DVC
 
