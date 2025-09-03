@@ -40,6 +40,8 @@ def train_model(
     import sklearn
     import tensorflow as tf
 
+    print("Training model with hyperparameters:", hyperparameters)
+
     SEED = 42
     tf.random.set_seed(SEED)
     tf.keras.utils.set_random_seed(SEED)
