@@ -94,8 +94,8 @@ def fetch_data_from_dvc(
         print(f"Could not check out version {git_version}, using main")
 
     # Pull the specific dataset using DVC with new folder structure
-    dataset_path = dataset_name  # e.g., "datasets/exhaust-data/data.parquet"
-    dvc_file_path = f"{dataset_name}.dvc"  # e.g., "datasets/exhaust-data/data.parquet.dvc"
+    dataset_path = dataset_name  # e.g., "datasets/demand-forecaster-data/data.parquet"
+    dvc_file_path = f"{dataset_name}.dvc"  # e.g., "datasets/demand-forecaster-data/data.parquet.dvc"
     
     if not os.path.exists(dvc_file_path):
         raise FileNotFoundError(f"DVC file not found: {dvc_file_path}")
